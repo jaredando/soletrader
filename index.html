@@ -61,29 +61,65 @@
     margin-bottom: 24px;
   }
 
-  details.section {
-    border-top: 1px solid var(--line);
-    padding: 14px 0;
+  .editor {
+    counter-reset: section-num;
   }
-  details.section[open] { padding-bottom: 18px; }
+
+  details.section {
+    background: var(--soft);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    transition: box-shadow 0.2s, border-color 0.2s;
+  }
+  details.section[open] {
+    background: #fbf8f2;
+    border-color: var(--line-strong);
+    box-shadow: 0 1px 0 rgba(28,26,23,0.04), 0 4px 16px -8px rgba(28,26,23,0.12);
+  }
+  details.section[open] { padding-bottom: 20px; }
   details.section > summary {
     cursor: pointer;
     list-style: none;
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--muted);
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    counter-increment: section-num;
   }
   details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary::before {
+    content: "0" counter(section-num);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 3px 7px;
+    margin-right: 12px;
+    font-weight: 400;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  details.section[open] > summary::before {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
   details.section > summary::after {
     content: "+";
     font-family: var(--serif);
-    font-size: 18px;
+    font-size: 22px;
     color: var(--muted);
+    font-weight: 300;
+    line-height: 1;
+    margin-left: auto;
+    padding-left: 12px;
   }
   details.section[open] > summary::after { content: "−"; }
 
@@ -561,7 +597,10 @@
 ===================================================== */
 const STORE_KEY = "invoicer_v1";
 
+const SCHEMA_VERSION = 3;
+
 const defaultState = {
+  schemaVersion: SCHEMA_VERSION,
   profiles: {},         // id -> { id, label, name, abn, tfn, addr1, addr2, country, phone, email, bsb, acc, accname }
   activeProfileId: null,
   clients: {},          // id -> { id, name, addr1, addr2, country, lastInvoice, nextInvoiceNumber, profileId }
@@ -579,30 +618,151 @@ function emptyProfile(label) {
   return p;
 }
 
+function safeNum(v, fallback) {
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return isNaN(n) ? fallback : n;
+}
+
 let state = load();
 
 function load() {
+  let parsed;
   try {
     const s = localStorage.getItem(STORE_KEY);
     if (!s) return structuredClone(defaultState);
-    const parsed = JSON.parse(s);
-
-    // Migration: old format had a single `personal` object. Wrap it into a default profile.
-    if (parsed.personal && !parsed.profiles) {
-      const pid = "pf_" + Date.now().toString(36);
-      parsed.profiles = { [pid]: Object.assign({ id: pid, label: "Default" }, parsed.personal) };
-      parsed.activeProfileId = pid;
-      delete parsed.personal;
-    }
-
-    // Merge with defaults to be forward-compatible
-    return Object.assign(structuredClone(defaultState), parsed);
+    parsed = JSON.parse(s);
   } catch (e) {
+    console.warn("Invoicer: could not parse stored data, starting fresh.", e);
+    return structuredClone(defaultState);
+  }
+
+  // Wrap migration in try/catch too so corrupt data never wedges the app
+  try {
+    return migrate(parsed);
+  } catch (e) {
+    console.warn("Invoicer: migration failed, starting fresh. Stored data preserved at invoicer_v1_backup_*", e);
+    // Keep a backup so the user can recover manually if needed
+    try {
+      localStorage.setItem(STORE_KEY + "_backup_" + Date.now(), JSON.stringify(parsed));
+    } catch {}
     return structuredClone(defaultState);
   }
 }
+
+/**
+ * Migrate any older blob shape into the current schema, filling defaults defensively.
+ * Older shapes seen so far:
+ *   v1: { personal: {...}, clients: { id: {name, addr1, addr2, country, lastInvoice} }, activeClientId, nextInvoiceNumber, draft }
+ *   v2: same as v1 but each client also has nextInvoiceNumber (no global counter)
+ *   v3 (current): profiles map + activeProfileId, no personal, clients each have profileId
+ */
+function migrate(raw) {
+  if (!raw || typeof raw !== "object") return structuredClone(defaultState);
+
+  const out = structuredClone(defaultState);
+
+  /* ---- Profiles ---- */
+  if (raw.profiles && typeof raw.profiles === "object" && Object.keys(raw.profiles).length) {
+    // Already in profile format — normalise fields
+    Object.entries(raw.profiles).forEach(([id, p]) => {
+      const safe = { id: p.id || id };
+      PROFILE_FIELDS.forEach(f => { safe[f] = (p && typeof p[f] === "string") ? p[f] : ""; });
+      if (!safe.label) safe.label = "Default";
+      if (!safe.country) safe.country = "Australia";
+      out.profiles[safe.id] = safe;
+    });
+    out.activeProfileId =
+      (raw.activeProfileId && out.profiles[raw.activeProfileId])
+        ? raw.activeProfileId
+        : Object.keys(out.profiles)[0];
+  } else if (raw.personal && typeof raw.personal === "object") {
+    // v1/v2 migration: wrap flat personal into a single Default profile
+    const pid = "pf_legacy_" + Date.now().toString(36);
+    const p = { id: pid };
+    PROFILE_FIELDS.forEach(f => {
+      p[f] = (raw.personal && typeof raw.personal[f] === "string") ? raw.personal[f] : "";
+    });
+    p.label = "Default";
+    if (!p.country) p.country = "Australia";
+    out.profiles[pid] = p;
+    out.activeProfileId = pid;
+  } else {
+    // No profile info at all — leave empty, init() will seed a Default
+  }
+
+  /* ---- Clients ---- */
+  const defaultProfileId = out.activeProfileId;
+  const legacyGlobalCounter = safeNum(raw.nextInvoiceNumber, null); // v1 global counter, if present
+
+  if (raw.clients && typeof raw.clients === "object") {
+    Object.entries(raw.clients).forEach(([cid, cl]) => {
+      if (!cl || typeof cl !== "object") return;
+      const safe = {
+        id: cl.id || cid,
+        name: typeof cl.name === "string" ? cl.name : "",
+        addr1: typeof cl.addr1 === "string" ? cl.addr1 : "",
+        addr2: typeof cl.addr2 === "string" ? cl.addr2 : "",
+        country: typeof cl.country === "string" && cl.country ? cl.country : "Australia",
+        lastInvoice: (cl.lastInvoice && typeof cl.lastInvoice === "object") ? cl.lastInvoice : null,
+        nextInvoiceNumber:
+          safeNum(cl.nextInvoiceNumber, null) ??
+          (legacyGlobalCounter != null ? legacyGlobalCounter : 1),
+        profileId: (cl.profileId && out.profiles[cl.profileId]) ? cl.profileId : (defaultProfileId || null)
+      };
+      // Sanitise lastInvoice items if present
+      if (safe.lastInvoice && Array.isArray(safe.lastInvoice.items)) {
+        safe.lastInvoice.items = safe.lastInvoice.items.map(sanitiseItem);
+      }
+      out.clients[safe.id] = safe;
+    });
+    out.activeClientId =
+      (raw.activeClientId && out.clients[raw.activeClientId])
+        ? raw.activeClientId
+        : (Object.keys(out.clients)[0] || null);
+  }
+
+  /* ---- Draft ---- */
+  if (raw.draft && typeof raw.draft === "object") {
+    const d = raw.draft;
+    // Drop draft if it points to a client we no longer have
+    const draftClientOk = !d.clientId || out.clients[d.clientId];
+    if (draftClientOk) {
+      out.draft = {
+        clientId: d.clientId || out.activeClientId || null,
+        number: typeof d.number === "string" ? d.number : String(d.number || "1"),
+        issueDate: typeof d.issueDate === "string" ? d.issueDate : "",
+        dueDate: typeof d.dueDate === "string" ? d.dueDate : "",
+        paymentMethod: typeof d.paymentMethod === "string" ? d.paymentMethod : "Transfer",
+        notes: typeof d.notes === "string" ? d.notes : "",
+        items: Array.isArray(d.items) && d.items.length
+          ? d.items.map(sanitiseItem)
+          : [sanitiseItem({})]
+      };
+    }
+  }
+
+  return out;
+}
+
+function sanitiseItem(it) {
+  it = it || {};
+  return {
+    id: it.id || ("it_" + Math.random().toString(36).slice(2,9)),
+    title: typeof it.title === "string" ? it.title : "",
+    sub: typeof it.sub === "string" ? it.sub : "",
+    qty: safeNum(it.qty, 1),
+    price: safeNum(it.price, 0),
+    discount: safeNum(it.discount, 0)
+  };
+}
+
 function save() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  state.schemaVersion = SCHEMA_VERSION;
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn("Invoicer: failed to save (storage full or blocked).", e);
+  }
 }
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
