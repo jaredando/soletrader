@@ -467,9 +467,18 @@
     <h1 class="brand">Invoicer</h1>
     <div class="brand-sub">Sole trader invoicing</div>
 
-    <!-- Personal (global) -->
+    <!-- Sender profiles (global) -->
     <details class="section" id="personalSection">
       <summary>Your details</summary>
+      <div class="client-bar">
+        <div class="field" style="margin-top:0;">
+          <label>Profile</label>
+          <select id="profileSelect"></select>
+        </div>
+        <button class="btn small" id="newProfileBtn">New</button>
+        <button class="btn small danger" id="deleteProfileBtn" title="Delete profile">×</button>
+      </div>
+      <div class="field"><label>Profile label</label><input id="p_label" placeholder="e.g. Gigs, Professional"></div>
       <div class="field"><label>Name</label><input id="p_name" placeholder="Abbie Anderson"></div>
       <div class="row-2">
         <div class="field"><label>ABN</label><input id="p_abn"></div>
@@ -553,16 +562,22 @@
 const STORE_KEY = "invoicer_v1";
 
 const defaultState = {
-  personal: {
-    name: "", abn: "", tfn: "",
-    addr1: "", addr2: "", country: "Australia",
-    phone: "", email: "",
-    bsb: "", acc: "", accname: ""
-  },
-  clients: {},          // id -> { id, name, addr1, addr2, country, lastInvoice, nextInvoiceNumber }
+  profiles: {},         // id -> { id, label, name, abn, tfn, addr1, addr2, country, phone, email, bsb, acc, accname }
+  activeProfileId: null,
+  clients: {},          // id -> { id, name, addr1, addr2, country, lastInvoice, nextInvoiceNumber, profileId }
   activeClientId: null,
   draft: null           // currently being edited (autosaved)
 };
+
+const PROFILE_FIELDS = ["label","name","abn","tfn","addr1","addr2","country","phone","email","bsb","acc","accname"];
+
+function emptyProfile(label) {
+  const p = { id: "pf_" + Date.now().toString(36) + Math.random().toString(36).slice(2,5) };
+  PROFILE_FIELDS.forEach(f => p[f] = "");
+  p.label = label || "Default";
+  p.country = "Australia";
+  return p;
+}
 
 let state = load();
 
@@ -571,6 +586,15 @@ function load() {
     const s = localStorage.getItem(STORE_KEY);
     if (!s) return structuredClone(defaultState);
     const parsed = JSON.parse(s);
+
+    // Migration: old format had a single `personal` object. Wrap it into a default profile.
+    if (parsed.personal && !parsed.profiles) {
+      const pid = "pf_" + Date.now().toString(36);
+      parsed.profiles = { [pid]: Object.assign({ id: pid, label: "Default" }, parsed.personal) };
+      parsed.activeProfileId = pid;
+      delete parsed.personal;
+    }
+
     // Merge with defaults to be forward-compatible
     return Object.assign(structuredClone(defaultState), parsed);
   } catch (e) {
@@ -582,6 +606,10 @@ function save() {
 }
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function currentProfile() {
+  return state.activeProfileId ? state.profiles[state.activeProfileId] : null;
+}
 
 function newItem(prev) {
   if (prev) {
@@ -737,19 +765,47 @@ function advanceDatesInText(text, offsetDays) {
 /* =====================================================
    RENDER EDITOR
 ===================================================== */
+function renderProfileSelect() {
+  const sel = document.getElementById("profileSelect");
+  sel.innerHTML = "";
+  const ids = Object.keys(state.profiles);
+  if (ids.length === 0) {
+    const opt = document.createElement("option");
+    opt.textContent = "— no profiles —";
+    opt.value = "";
+    sel.appendChild(opt);
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  ids.forEach(id => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = state.profiles[id].label || "(unnamed)";
+    sel.appendChild(opt);
+  });
+  if (state.activeProfileId && state.profiles[state.activeProfileId]) {
+    sel.value = state.activeProfileId;
+  }
+}
+
 function renderPersonal() {
-  Object.keys(state.personal).forEach(k => {
+  const p = currentProfile();
+  PROFILE_FIELDS.forEach(k => {
     const el = document.getElementById("p_" + k);
-    if (el) el.value = state.personal[k] || "";
+    if (el) el.value = p ? (p[k] || "") : "";
   });
 }
 function bindPersonal() {
-  Object.keys(state.personal).forEach(k => {
+  PROFILE_FIELDS.forEach(k => {
     const el = document.getElementById("p_" + k);
     if (!el) return;
     el.addEventListener("input", () => {
-      state.personal[k] = el.value;
+      const p = currentProfile();
+      if (!p) return;
+      p[k] = el.value;
       save();
+      if (k === "label") renderProfileSelect();
       renderPreview();
     });
   });
@@ -875,7 +931,7 @@ function escapeHTML(s) {
 ===================================================== */
 function renderPreview() {
   const el = document.getElementById("invoicePreview");
-  const p = state.personal;
+  const p = currentProfile() || {};
   const c = state.activeClientId ? state.clients[state.activeClientId] : null;
   const d = state.draft;
 
@@ -988,7 +1044,13 @@ function createClient() {
   const name = prompt("Client name:");
   if (!name) return;
   const id = uid();
-  state.clients[id] = { id, name: name.trim(), addr1: "", addr2: "", country: "Australia", lastInvoice: null, nextInvoiceNumber: 1 };
+  state.clients[id] = {
+    id, name: name.trim(),
+    addr1: "", addr2: "", country: "Australia",
+    lastInvoice: null,
+    nextInvoiceNumber: 1,
+    profileId: state.activeProfileId  // pin current profile as this client's default
+  };
   state.activeClientId = id;
   state.draft = newDraft(id, false);
   save();
@@ -1003,6 +1065,12 @@ function deleteCurrentClient() {
   delete state.clients[state.activeClientId];
   const remaining = Object.keys(state.clients);
   state.activeClientId = remaining[0] || null;
+  if (state.activeClientId) {
+    const nextClient = state.clients[state.activeClientId];
+    if (nextClient.profileId && state.profiles[nextClient.profileId]) {
+      state.activeProfileId = nextClient.profileId;
+    }
+  }
   state.draft = state.activeClientId ? newDraft(state.activeClientId, true) : null;
   save();
   renderAll();
@@ -1011,9 +1079,59 @@ function deleteCurrentClient() {
 
 function switchClient(id) {
   if (!id || !state.clients[id]) return;
-  // Commit current draft to its client before switching (just snapshot)
   state.activeClientId = id;
+  const c = state.clients[id];
+  // Auto-load this client's associated profile (if any and still exists)
+  if (c.profileId && state.profiles[c.profileId]) {
+    state.activeProfileId = c.profileId;
+  }
   state.draft = newDraft(id, true);
+  save();
+  renderAll();
+}
+
+function createProfile() {
+  const label = prompt("Profile label (e.g. 'Gigs', 'Professional'):");
+  if (!label) return;
+  const p = emptyProfile(label.trim());
+  state.profiles[p.id] = p;
+  state.activeProfileId = p.id;
+  // Associate with current client if any
+  if (state.activeClientId && state.clients[state.activeClientId]) {
+    state.clients[state.activeClientId].profileId = p.id;
+  }
+  save();
+  renderAll();
+  document.getElementById("personalSection").open = true;
+  toast("Profile created");
+}
+
+function deleteCurrentProfile() {
+  if (!state.activeProfileId) return;
+  if (Object.keys(state.profiles).length <= 1) {
+    toast("Need at least one profile");
+    return;
+  }
+  const p = state.profiles[state.activeProfileId];
+  if (!confirm(`Delete profile "${p.label}"?`)) return;
+  // Unassign any clients pointing at this profile
+  Object.values(state.clients).forEach(cl => {
+    if (cl.profileId === state.activeProfileId) cl.profileId = null;
+  });
+  delete state.profiles[state.activeProfileId];
+  state.activeProfileId = Object.keys(state.profiles)[0];
+  save();
+  renderAll();
+  toast("Profile deleted");
+}
+
+function switchProfile(id) {
+  if (!id || !state.profiles[id]) return;
+  state.activeProfileId = id;
+  // Pin this profile as the active client's default
+  if (state.activeClientId && state.clients[state.activeClientId]) {
+    state.clients[state.activeClientId].profileId = id;
+  }
   save();
   renderAll();
 }
@@ -1072,6 +1190,7 @@ function toast(msg) {
 }
 
 function renderAll() {
+  renderProfileSelect();
   renderPersonal();
   renderClientSelect();
   renderClientFields();
@@ -1084,6 +1203,15 @@ function renderAll() {
    INIT
 ===================================================== */
 function init() {
+  // Ensure at least one profile exists
+  if (Object.keys(state.profiles).length === 0) {
+    const p = emptyProfile("Default");
+    state.profiles[p.id] = p;
+    state.activeProfileId = p.id;
+  } else if (!state.activeProfileId || !state.profiles[state.activeProfileId]) {
+    state.activeProfileId = Object.keys(state.profiles)[0];
+  }
+
   // First-run: if no draft and there's a client, build one. If no clients, leave empty.
   if (!state.draft && state.activeClientId && state.clients[state.activeClientId]) {
     state.draft = newDraft(state.activeClientId, true);
@@ -1091,8 +1219,8 @@ function init() {
     state.activeClientId = Object.keys(state.clients)[0];
     state.draft = newDraft(state.activeClientId, true);
   }
-  // Open personal panel if no personal info yet
-  if (!state.personal.name) {
+  // Open profile panel if active profile has no name yet
+  if (!currentProfile()?.name) {
     document.getElementById("personalSection").open = true;
   }
 
@@ -1100,6 +1228,9 @@ function init() {
   bindClientFields();
   bindInvoiceMeta();
 
+  document.getElementById("profileSelect").addEventListener("change", (e) => switchProfile(e.target.value));
+  document.getElementById("newProfileBtn").addEventListener("click", createProfile);
+  document.getElementById("deleteProfileBtn").addEventListener("click", deleteCurrentProfile);
   document.getElementById("clientSelect").addEventListener("change", (e) => switchClient(e.target.value));
   document.getElementById("newClientBtn").addEventListener("click", createClient);
   document.getElementById("deleteClientBtn").addEventListener("click", deleteCurrentClient);
