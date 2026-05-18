@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invoicer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f1ea;
+    --panel: #ffffff;
+    --ink: #1c1a17;
+    --muted: #6b655c;
+    --line: #d8d1c5;
+    --line-strong: #2a2620;
+    --accent: #6b3a1f;
+    --soft: #efeae0;
+    --danger: #a23a2d;
+    --ok: #2d5544;
+    --radius: 4px;
+    --sans: "IBM Plex Sans", system-ui, sans-serif;
+    --serif: "Fraunces", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+
+  .app {
+    display: grid;
+    grid-template-columns: 460px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ===== Editor (left) ===== */
+  .editor {
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 28px 28px 80px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  .brand {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px;
+  }
+  .brand-sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+
+  details.section {
+    border-top: 1px solid var(--line);
+    padding: 14px 0;
+  }
+  details.section[open] { padding-bottom: 18px; }
+  details.section > summary {
+    cursor: pointer;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary::after {
+    content: "+";
+    font-family: var(--serif);
+    font-size: 18px;
+    color: var(--muted);
+  }
+  details.section[open] > summary::after { content: "−"; }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    margin-top: 12px;
+  }
+  .field label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .field input, .field textarea, .field select {
+    font-family: var(--sans);
+    font-size: 14px;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    padding: 6px 0;
+    background: transparent;
+    color: var(--ink);
+    border-radius: 0;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus {
+    border-bottom-color: var(--line-strong);
+  }
+  .field textarea {
+    resize: vertical;
+    min-height: 60px;
+    font-family: var(--sans);
+  }
+  .field select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b655c'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    padding-right: 18px;
+  }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* Client controls */
+  .client-bar {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    align-items: end;
+    margin-top: 12px;
+  }
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid var(--line-strong);
+    color: var(--ink);
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--ink); color: var(--panel); }
+  .btn.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+  .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+  .btn.ghost { border-color: var(--line); color: var(--muted); }
+  .btn.ghost:hover { background: var(--soft); color: var(--ink); border-color: var(--line); }
+  .btn.danger { border-color: var(--danger); color: var(--danger); }
+  .btn.danger:hover { background: var(--danger); color: white; }
+  .btn.small { padding: 5px 9px; font-size: 10px; }
+
+  /* Line items */
+  .items {
+    margin-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .item {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  .item-grid {
+    display: grid;
+    grid-template-columns: 1fr 60px 80px 60px;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .item .remove {
+    position: absolute;
+    top: 14px;
+    right: 0;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
+  }
+  .item .remove:hover { color: var(--danger); }
+  .item-desc {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .actions-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 460px;
+    background: var(--panel);
+    padding: 14px 28px;
+    border-top: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+  }
+  .actions-bar .btn { flex: 1; }
+
+  /* Floating jump button (mobile only) */
+  .jump-btn {
+    display: none;
+    position: fixed;
+    right: 16px;
+    bottom: 76px;
+    z-index: 20;
+    background: var(--ink);
+    color: var(--panel);
+    border: none;
+    border-radius: 999px;
+    padding: 12px 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s;
+  }
+  .jump-btn:hover { background: var(--accent); }
+  .jump-btn:active { transform: scale(0.96); }
+  .jump-btn .arrow { display: inline-block; margin-left: 4px; }
+
+  /* ===== Preview (right) ===== */
+  .preview-wrap {
+    padding: 40px;
+    overflow-y: auto;
+    max-height: 100vh;
+  }
+
+  .invoice {
+    background: white;
+    width: 794px; /* A4 width at 96dpi */
+    min-height: 1123px; /* A4 height */
+    margin: 0 auto;
+    padding: 60px 56px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 12px 40px rgba(28,26,23,0.08);
+    color: #111;
+    font-size: 11pt;
+    line-height: 1.4;
+    position: relative;
+  }
+
+  .inv-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    margin-bottom: 36px;
+  }
+  .inv-from { font-size: 9.5pt; }
+  .inv-from .name {
+    font-family: var(--serif);
+    font-size: 16pt;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: #111;
+    letter-spacing: -0.01em;
+  }
+  .inv-from div { margin-bottom: 1px; }
+  .inv-from .contact { margin-top: 8px; }
+
+  .inv-label {
+    font-family: var(--serif);
+    font-size: 32pt;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    text-align: right;
+    color: #111;
+    line-height: 1;
+  }
+
+  .inv-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-bottom: 30px;
+  }
+  .inv-bill h4, .inv-info h4 {
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 8px;
+    color: #555;
+    font-weight: 600;
+  }
+  .inv-bill .client-name { font-weight: 600; font-size: 10.5pt; }
+  .inv-bill div { font-size: 9.5pt; margin-bottom: 1px; }
+  .inv-info .info-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    font-size: 9.5pt;
+    margin-bottom: 3px;
+  }
+  .inv-info .info-label { color: #555; }
+
+  .inv-totals {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .total-box {
+    background: #f4f1ec;
+    padding: 14px 16px;
+    border-radius: 2px;
+  }
+  .total-box .label {
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #555;
+    margin-bottom: 4px;
+  }
+  .total-box .amt {
+    font-size: 14pt;
+    font-weight: 600;
+    font-family: var(--serif);
+  }
+
+  table.lines {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+    font-size: 9.5pt;
+  }
+  table.lines thead th {
+    text-align: left;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #555;
+    font-weight: 600;
+    padding: 8px 6px;
+    border-bottom: 1.5px solid #111;
+  }
+  table.lines thead th.num { text-align: right; }
+  table.lines tbody td {
+    padding: 12px 6px;
+    border-bottom: 1px solid #e5e1d8;
+    vertical-align: top;
+  }
+  table.lines tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.lines tbody td .item-title { font-weight: 500; margin-bottom: 2px; }
+  table.lines tbody td .item-sub { font-size: 8.5pt; color: #555; }
+  table.lines tfoot td {
+    padding: 8px 6px;
+    font-size: 9.5pt;
+  }
+  table.lines tfoot tr.subtotal td { border-top: 1px solid #ccc; }
+  table.lines tfoot tr.grand td {
+    font-weight: 600;
+    font-size: 11pt;
+    border-top: 1.5px solid #111;
+    padding-top: 10px;
+  }
+  table.lines tfoot td.label { text-align: right; color: #555; }
+  table.lines tfoot tr.grand td.label { color: #111; }
+
+  .inv-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e1d8;
+    font-size: 9pt;
+  }
+  .inv-footer h4 {
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 6px;
+    color: #555;
+    font-weight: 600;
+  }
+  .inv-footer .pay-row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .inv-footer .pay-row > div span { color: #555; margin-right: 4px; }
+
+  .inv-notes {
+    margin-top: 18px;
+    font-size: 9pt;
+    color: #555;
+    font-style: italic;
+  }
+
+  /* Empty client state */
+  .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--ink);
+    color: white;
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-family: var(--mono);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.25s;
+    pointer-events: none;
+    z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Responsive */
+  @media (max-width: 1100px) {
+    .app { grid-template-columns: 1fr; }
+    .editor { position: static; max-height: none; border-right: none; border-bottom: 1px solid var(--line); }
+    .actions-bar { width: 100%; }
+    .invoice { width: 100%; padding: 32px; min-height: auto; }
+    .preview-wrap { padding: 20px; }
+    .jump-btn { display: inline-flex; align-items: center; }
+  }
+
+  /* ===== Print ===== */
+  @media print {
+    @page { size: A4; margin: 0; }
+    body { background: white; }
+    .editor, .actions-bar, .toast, .jump-btn { display: none !important; }
+    .app { display: block; }
+    .preview-wrap { padding: 0; max-height: none; overflow: visible; }
+    .invoice {
+      box-shadow: none;
+      width: 100%;
+      min-height: auto;
+      margin: 0;
+      padding: 50px 50px;
+    }
+    table.lines tbody tr, table.lines tfoot tr { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ============ EDITOR ============ -->
+  <aside class="editor">
+    <h1 class="brand">Invoicer</h1>
+    <div class="brand-sub">Sole trader invoicing</div>
+
+    <!-- Personal (global) -->
+    <details class="section" id="personalSection">
+      <summary>Your details</summary>
+      <div class="field"><label>Name</label><input id="p_name" placeholder="Abbie Anderson"></div>
+      <div class="row-2">
+        <div class="field"><label>ABN</label><input id="p_abn"></div>
+        <div class="field"><label>TFN</label><input id="p_tfn"></div>
+      </div>
+      <div class="field"><label>Address line 1</label><input id="p_addr1"></div>
+      <div class="field"><label>Address line 2</label><input id="p_addr2"></div>
+      <div class="field"><label>Country</label><input id="p_country" placeholder="Australia"></div>
+      <div class="row-2">
+        <div class="field"><label>Phone</label><input id="p_phone"></div>
+        <div class="field"><label>Email</label><input id="p_email"></div>
+      </div>
+      <div class="row-2">
+        <div class="field"><label>BSB</label><input id="p_bsb"></div>
+        <div class="field"><label>Account number</label><input id="p_acc"></div>
+      </div>
+      <div class="field"><label>Account holder</label><input id="p_accname"></div>
+    </details>
+
+    <!-- Client -->
+    <details class="section" open>
+      <summary>Client</summary>
+      <div class="client-bar">
+        <div class="field" style="margin-top:0;">
+          <label>Select client</label>
+          <select id="clientSelect"></select>
+        </div>
+        <button class="btn small" id="newClientBtn">New</button>
+        <button class="btn small danger" id="deleteClientBtn" title="Delete client">×</button>
+      </div>
+      <div id="clientFields" style="margin-top:10px;">
+        <div class="field"><label>Client name</label><input id="c_name"></div>
+        <div class="field"><label>Address line 1</label><input id="c_addr1"></div>
+        <div class="field"><label>Address line 2</label><input id="c_addr2"></div>
+        <div class="field"><label>Country</label><input id="c_country" placeholder="Australia"></div>
+      </div>
+    </details>
+
+    <!-- Invoice meta -->
+    <details class="section" open>
+      <summary>Invoice</summary>
+      <div class="row-2">
+        <div class="field"><label>Invoice number</label><input id="i_number"></div>
+        <div class="field"><label>Payment method</label><input id="i_paymethod" placeholder="Transfer"></div>
+      </div>
+      <div class="row-2">
+        <div class="field"><label>Issue date</label><input type="date" id="i_issue"></div>
+        <div class="field"><label>Due date</label><input type="date" id="i_due"></div>
+      </div>
+      <div class="field"><label>Notes (optional)</label><textarea id="i_notes" rows="2"></textarea></div>
+    </details>
+
+    <!-- Items -->
+    <details class="section" open>
+      <summary>Line items</summary>
+      <div class="items" id="itemsContainer"></div>
+      <button class="btn ghost" id="addItemBtn" style="margin-top:12px; width:100%;">+ Add item</button>
+    </details>
+  </aside>
+
+  <!-- ============ PREVIEW ============ -->
+  <main class="preview-wrap">
+    <div class="invoice" id="invoicePreview"></div>
+  </main>
+</div>
+
+<!-- Actions -->
+<div class="actions-bar">
+  <button class="btn ghost" id="newInvoiceBtn">New invoice</button>
+  <button class="btn primary" id="exportBtn">Export PDF</button>
+</div>
+
+<button class="jump-btn" id="jumpBtn" aria-label="Jump to invoice"><span id="jumpLabel">View invoice</span><span class="arrow" id="jumpArrow">↓</span></button>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================
+   STATE & STORAGE
+===================================================== */
+const STORE_KEY = "invoicer_v1";
+
+const defaultState = {
+  personal: {
+    name: "", abn: "", tfn: "",
+    addr1: "", addr2: "", country: "Australia",
+    phone: "", email: "",
+    bsb: "", acc: "", accname: ""
+  },
+  clients: {},          // id -> { id, name, addr1, addr2, country, lastInvoice, nextInvoiceNumber }
+  activeClientId: null,
+  draft: null           // currently being edited (autosaved)
+};
+
+let state = load();
+
+function load() {
+  try {
+    const s = localStorage.getItem(STORE_KEY);
+    if (!s) return structuredClone(defaultState);
+    const parsed = JSON.parse(s);
+    // Merge with defaults to be forward-compatible
+    return Object.assign(structuredClone(defaultState), parsed);
+  } catch (e) {
+    return structuredClone(defaultState);
+  }
+}
+function save() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+}
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function newItem(prev) {
+  if (prev) {
+    return {
+      id: uid(),
+      title: prev.title || "",
+      sub: prev.sub || "",
+      qty: prev.qty || 1,
+      price: prev.price || 0,
+      discount: prev.discount || 0
+    };
+  }
+  return { id: uid(), title: "", sub: "", qty: 1, price: 0, discount: 0 };
+}
+
+function newDraft(clientId, prefillFromLast = true) {
+  const today = new Date();
+  const client = clientId ? state.clients[clientId] : null;
+  const nextNum = client ? (client.nextInvoiceNumber || 1) : 1;
+  let draft = {
+    clientId: clientId,
+    number: String(nextNum),
+    issueDate: dateToISO(today),
+    dueDate: dateToISO(addDays(today, 7)),
+    paymentMethod: "Transfer",
+    notes: "",
+    items: [newItem()]
+  };
+
+  if (prefillFromLast && client && client.lastInvoice) {
+    const last = client.lastInvoice;
+    const lastIssue = isoToDate(last.issueDate);
+    const lastDue = isoToDate(last.dueDate);
+    const gap = lastDue && lastIssue ? Math.round((lastDue - lastIssue) / 86400000) : 7;
+
+    // Advance both dates by 7 days from last issue (weekly cadence default)
+    const newIssue = addDays(lastIssue || today, 7);
+    const newDue = addDays(newIssue, gap || 7);
+    const dayOffset = Math.round((newIssue - lastIssue) / 86400000);
+
+    draft.issueDate = dateToISO(newIssue);
+    draft.dueDate = dateToISO(newDue);
+    draft.paymentMethod = last.paymentMethod || "Transfer";
+    draft.notes = last.notes || "";
+
+    // Roll item descriptions forward by dayOffset
+    draft.items = (last.items || [newItem()]).map(it => ({
+      id: uid(),
+      title: advanceDatesInText(it.title || "", dayOffset),
+      sub: advanceDatesInText(it.sub || "", dayOffset),
+      qty: it.qty,
+      price: it.price,
+      discount: it.discount
+    }));
+  }
+
+  return draft;
+}
+
+/* =====================================================
+   DATE HELPERS + INTELLIGENT DATE ROLL
+===================================================== */
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MONTHS_LOWER = MONTHS.map(m => m.toLowerCase());
+
+function dateToISO(d) {
+  if (!d) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function isoToDate(s) {
+  if (!s) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function formatDateAU(iso) {
+  const d = isoToDate(iso);
+  if (!d) return "";
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+}
+function ordinal(n) {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return n + "th";
+  switch (n % 10) {
+    case 1: return n + "st";
+    case 2: return n + "nd";
+    case 3: return n + "rd";
+    default: return n + "th";
+  }
+}
+
+/**
+ * Find date references in free text and advance them by offsetDays.
+ * Matches:
+ *  - "Tuesday 5th May 2026", "Tuesday 5th May", "5th May 2026", "5 May 2026", "May 5", etc.
+ * Preserves the components that were originally present (recalculating day-of-week).
+ */
+function advanceDatesInText(text, offsetDays) {
+  if (!text || !offsetDays) return text;
+
+  // Pattern 1: optional day-name, then "5th May" / "5 May" with optional year
+  const re1 = /(?:(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[ ,]+)?(\d{1,2})(st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+(\d{4}))?/gi;
+
+  text = text.replace(re1, (match, dayName, dayNum, ord, month, year) => {
+    const monthIdx = MONTHS_LOWER.indexOf(month.toLowerCase());
+    if (monthIdx < 0) return match;
+    const yr = year ? parseInt(year) : new Date().getFullYear();
+    const d = new Date(yr, monthIdx, parseInt(dayNum));
+    if (isNaN(d.getTime())) return match;
+    d.setDate(d.getDate() + offsetDays);
+
+    let out = "";
+    if (dayName) out += DAYS[d.getDay()] + " ";
+    const dn = d.getDate();
+    out += ord ? ordinal(dn) : String(dn);
+    out += " " + MONTHS[d.getMonth()];
+    if (year) out += " " + d.getFullYear();
+    return out;
+  });
+
+  // Pattern 2: "May 5", "May 5th 2026"
+  const re2 = /(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(st|nd|rd|th)?(?:[ ,]+(\d{4}))?/gi;
+  text = text.replace(re2, (match, month, dayNum, ord, year) => {
+    const monthIdx = MONTHS_LOWER.indexOf(month.toLowerCase());
+    if (monthIdx < 0) return match;
+    const yr = year ? parseInt(year) : new Date().getFullYear();
+    const d = new Date(yr, monthIdx, parseInt(dayNum));
+    if (isNaN(d.getTime())) return match;
+    d.setDate(d.getDate() + offsetDays);
+    let out = MONTHS[d.getMonth()] + " " + (ord ? ordinal(d.getDate()) : d.getDate());
+    if (year) out += " " + d.getFullYear();
+    return out;
+  });
+
+  // Pattern 3: numeric dd/mm/yyyy or d/m/yy
+  const re3 = /\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/g;
+  text = text.replace(re3, (match, dd, mm, yy) => {
+    let year = parseInt(yy);
+    if (yy.length === 2) year += 2000;
+    const d = new Date(year, parseInt(mm) - 1, parseInt(dd));
+    if (isNaN(d.getTime())) return match;
+    d.setDate(d.getDate() + offsetDays);
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+  });
+
+  return text;
+}
+
+/* =====================================================
+   RENDER EDITOR
+===================================================== */
+function renderPersonal() {
+  Object.keys(state.personal).forEach(k => {
+    const el = document.getElementById("p_" + k);
+    if (el) el.value = state.personal[k] || "";
+  });
+}
+function bindPersonal() {
+  Object.keys(state.personal).forEach(k => {
+    const el = document.getElementById("p_" + k);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      state.personal[k] = el.value;
+      save();
+      renderPreview();
+    });
+  });
+}
+
+function renderClientSelect() {
+  const sel = document.getElementById("clientSelect");
+  sel.innerHTML = "";
+  const ids = Object.keys(state.clients);
+  if (ids.length === 0) {
+    const opt = document.createElement("option");
+    opt.textContent = "— no clients yet —";
+    opt.value = "";
+    sel.appendChild(opt);
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+    ids.forEach(id => {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = state.clients[id].name || "(unnamed)";
+      sel.appendChild(opt);
+    });
+    if (state.activeClientId && state.clients[state.activeClientId]) {
+      sel.value = state.activeClientId;
+    }
+  }
+}
+
+function renderClientFields() {
+  const c = state.activeClientId ? state.clients[state.activeClientId] : null;
+  ["name","addr1","addr2","country"].forEach(k => {
+    const el = document.getElementById("c_" + k);
+    if (el) el.value = c ? (c[k] || "") : "";
+  });
+}
+
+function bindClientFields() {
+  ["name","addr1","addr2","country"].forEach(k => {
+    const el = document.getElementById("c_" + k);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      if (!state.activeClientId) return;
+      state.clients[state.activeClientId][k] = el.value;
+      save();
+      if (k === "name") renderClientSelect();
+      renderPreview();
+    });
+  });
+}
+
+function renderInvoiceMeta() {
+  if (!state.draft) return;
+  document.getElementById("i_number").value = state.draft.number || "";
+  document.getElementById("i_issue").value = state.draft.issueDate || "";
+  document.getElementById("i_due").value = state.draft.dueDate || "";
+  document.getElementById("i_paymethod").value = state.draft.paymentMethod || "";
+  document.getElementById("i_notes").value = state.draft.notes || "";
+}
+function bindInvoiceMeta() {
+  const map = { i_number: "number", i_issue: "issueDate", i_due: "dueDate", i_paymethod: "paymentMethod", i_notes: "notes" };
+  Object.keys(map).forEach(id => {
+    document.getElementById(id).addEventListener("input", (e) => {
+      if (!state.draft) return;
+      state.draft[map[id]] = e.target.value;
+      save();
+      renderPreview();
+    });
+  });
+}
+
+function renderItems() {
+  const c = document.getElementById("itemsContainer");
+  c.innerHTML = "";
+  if (!state.draft) return;
+  state.draft.items.forEach((it, idx) => {
+    const wrap = document.createElement("div");
+    wrap.className = "item";
+    wrap.innerHTML = `
+      <div class="item-desc">Item ${idx + 1}</div>
+      <button class="remove" data-idx="${idx}" title="Remove">×</button>
+      <div class="field" style="margin-top:6px;"><label>Title</label><input data-field="title" data-idx="${idx}" value="${escapeHTML(it.title)}"></div>
+      <div class="field"><label>Description (optional)</label><textarea data-field="sub" data-idx="${idx}" rows="2">${escapeHTML(it.sub)}</textarea></div>
+      <div class="item-grid">
+        <div></div>
+        <div class="field" style="margin-top:0;"><label>Qty</label><input type="number" step="0.01" data-field="qty" data-idx="${idx}" value="${it.qty}"></div>
+        <div class="field" style="margin-top:0;"><label>Unit $</label><input type="number" step="0.01" data-field="price" data-idx="${idx}" value="${it.price}"></div>
+        <div class="field" style="margin-top:0;"><label>Disc %</label><input type="number" step="0.01" data-field="discount" data-idx="${idx}" value="${it.discount}"></div>
+      </div>
+    `;
+    c.appendChild(wrap);
+  });
+
+  c.querySelectorAll("input[data-field], textarea[data-field]").forEach(el => {
+    el.addEventListener("input", (e) => {
+      const idx = parseInt(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      let val = e.target.value;
+      if (["qty","price","discount"].includes(field)) val = parseFloat(val) || 0;
+      state.draft.items[idx][field] = val;
+      save();
+      renderPreview();
+    });
+  });
+  c.querySelectorAll(".remove").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const idx = parseInt(e.target.dataset.idx);
+      state.draft.items.splice(idx, 1);
+      if (state.draft.items.length === 0) state.draft.items.push(newItem());
+      save();
+      renderItems();
+      renderPreview();
+    });
+  });
+}
+
+function escapeHTML(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* =====================================================
+   RENDER PREVIEW
+===================================================== */
+function renderPreview() {
+  const el = document.getElementById("invoicePreview");
+  const p = state.personal;
+  const c = state.activeClientId ? state.clients[state.activeClientId] : null;
+  const d = state.draft;
+
+  if (!d) {
+    el.innerHTML = `<div class="empty-state">Select or create a client, then start an invoice.</div>`;
+    return;
+  }
+
+  const items = d.items || [];
+  let total = 0;
+  const rows = items.map(it => {
+    const lineAmt = (it.qty || 0) * (it.price || 0) * (1 - (it.discount || 0) / 100);
+    total += lineAmt;
+    return `
+      <tr>
+        <td>
+          <div class="item-title">${escapeHTML(it.title || "")}</div>
+          ${it.sub ? `<div class="item-sub">${escapeHTML(it.sub).replace(/\n/g,"<br>")}</div>` : ""}
+        </td>
+        <td class="num">${formatNum(it.qty)}</td>
+        <td class="num">${formatMoney(it.price)}</td>
+        <td class="num">${formatNum(it.discount)}</td>
+        <td class="num">${formatMoney(lineAmt)}</td>
+      </tr>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div class="inv-header">
+      <div class="inv-from">
+        <div class="name">${escapeHTML(p.name) || "Your Name"}</div>
+        ${p.addr1 ? `<div>${escapeHTML(p.addr1)}</div>` : ""}
+        ${p.addr2 ? `<div>${escapeHTML(p.addr2)}</div>` : ""}
+        ${p.country ? `<div>${escapeHTML(p.country)}</div>` : ""}
+        <div class="contact">
+          ${p.phone ? `<div>${escapeHTML(p.phone)}</div>` : ""}
+          ${p.email ? `<div>${escapeHTML(p.email)}</div>` : ""}
+        </div>
+        ${(p.abn || p.tfn) ? `<div style="margin-top:6px;">${p.abn ? `ABN: ${escapeHTML(p.abn)}` : ""}${p.abn && p.tfn ? "  ·  " : ""}${p.tfn ? `TFN: ${escapeHTML(p.tfn)}` : ""}</div>` : ""}
+      </div>
+      <div class="inv-label">INVOICE</div>
+    </div>
+
+    <div class="inv-meta">
+      <div class="inv-bill">
+        <h4>Bill to</h4>
+        ${c ? `
+          <div class="client-name">${escapeHTML(c.name || "")}</div>
+          ${c.addr1 ? `<div>${escapeHTML(c.addr1)}</div>` : ""}
+          ${c.addr2 ? `<div>${escapeHTML(c.addr2)}</div>` : ""}
+          ${c.country ? `<div>${escapeHTML(c.country)}</div>` : ""}
+        ` : `<div style="color:#999;">No client selected</div>`}
+      </div>
+      <div class="inv-info">
+        <div class="info-row"><span class="info-label">Invoice No.:</span><span>${escapeHTML(d.number)}</span></div>
+        <div class="info-row"><span class="info-label">Issue date:</span><span>${formatDateAU(d.issueDate)}</span></div>
+        <div class="info-row"><span class="info-label">Due date:</span><span>${formatDateAU(d.dueDate)}</span></div>
+        ${d.paymentMethod ? `<div class="info-row"><span class="info-label">Payment method:</span><span>${escapeHTML(d.paymentMethod)}</span></div>` : ""}
+      </div>
+    </div>
+
+    <div class="inv-totals">
+      <div class="total-box">
+        <div class="label">Total (AUD)</div>
+        <div class="amt">$${formatMoney(total)}</div>
+      </div>
+      <div class="total-box">
+        <div class="label">Total Due (AUD)</div>
+        <div class="amt">$${formatMoney(total)}</div>
+      </div>
+    </div>
+
+    <table class="lines">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th class="num">Quantity</th>
+          <th class="num">Unit price ($)</th>
+          <th class="num">Discount %</th>
+          <th class="num">Amount ($)</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div class="inv-footer">
+      <h4>Payment details</h4>
+      <div class="pay-row">
+        ${p.accname ? `<div><span>Account holder:</span>${escapeHTML(p.accname)}</div>` : ""}
+        ${p.bsb ? `<div><span>BSB:</span>${escapeHTML(p.bsb)}</div>` : ""}
+        ${p.acc ? `<div><span>Account No.:</span>${escapeHTML(p.acc)}</div>` : ""}
+      </div>
+      ${d.notes ? `<div class="inv-notes">${escapeHTML(d.notes).replace(/\n/g,"<br>")}</div>` : ""}
+    </div>
+  `;
+}
+
+function formatMoney(n) {
+  const v = Number(n) || 0;
+  return v.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function formatNum(n) {
+  const v = Number(n) || 0;
+  return v % 1 === 0 ? String(v) : v.toFixed(2);
+}
+
+/* =====================================================
+   ACTIONS: NEW CLIENT, NEW INVOICE, DELETE, EXPORT
+===================================================== */
+function createClient() {
+  const name = prompt("Client name:");
+  if (!name) return;
+  const id = uid();
+  state.clients[id] = { id, name: name.trim(), addr1: "", addr2: "", country: "Australia", lastInvoice: null, nextInvoiceNumber: 1 };
+  state.activeClientId = id;
+  state.draft = newDraft(id, false);
+  save();
+  renderAll();
+  toast("Client created");
+}
+
+function deleteCurrentClient() {
+  if (!state.activeClientId) return;
+  const c = state.clients[state.activeClientId];
+  if (!confirm(`Delete client "${c.name}"? Their invoice history will be lost.`)) return;
+  delete state.clients[state.activeClientId];
+  const remaining = Object.keys(state.clients);
+  state.activeClientId = remaining[0] || null;
+  state.draft = state.activeClientId ? newDraft(state.activeClientId, true) : null;
+  save();
+  renderAll();
+  toast("Client deleted");
+}
+
+function switchClient(id) {
+  if (!id || !state.clients[id]) return;
+  // Commit current draft to its client before switching (just snapshot)
+  state.activeClientId = id;
+  state.draft = newDraft(id, true);
+  save();
+  renderAll();
+}
+
+function startNewInvoice() {
+  if (!state.activeClientId) {
+    toast("Create or select a client first");
+    return;
+  }
+  const client = state.clients[state.activeClientId];
+  // Snapshot current draft as the client's last invoice (so the new one rolls from it)
+  commitDraftAsLast();
+  // Bump this client's counter based on current draft number
+  const n = parseInt(state.draft?.number);
+  client.nextInvoiceNumber = Math.max(client.nextInvoiceNumber || 1, (isNaN(n) ? 0 : n) + 1);
+  state.draft = newDraft(state.activeClientId, true);
+  save();
+  renderAll();
+  toast("New invoice started");
+}
+
+function commitDraftAsLast() {
+  if (!state.draft || !state.activeClientId) return;
+  const c = state.clients[state.activeClientId];
+  if (!c) return;
+  c.lastInvoice = JSON.parse(JSON.stringify(state.draft));
+  save();
+}
+
+function addItem() {
+  if (!state.draft) return;
+  const last = state.draft.items[state.draft.items.length - 1];
+  state.draft.items.push(newItem(last));
+  save();
+  renderItems();
+  renderPreview();
+}
+
+function exportPDF() {
+  commitDraftAsLast();
+  // Bump this client's counter so next new invoice picks up where this one left off
+  if (state.activeClientId && state.clients[state.activeClientId]) {
+    const client = state.clients[state.activeClientId];
+    const n = parseInt(state.draft.number);
+    if (!isNaN(n)) client.nextInvoiceNumber = Math.max(client.nextInvoiceNumber || 1, n + 1);
+  }
+  save();
+  window.print();
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+function renderAll() {
+  renderPersonal();
+  renderClientSelect();
+  renderClientFields();
+  renderInvoiceMeta();
+  renderItems();
+  renderPreview();
+}
+
+/* =====================================================
+   INIT
+===================================================== */
+function init() {
+  // First-run: if no draft and there's a client, build one. If no clients, leave empty.
+  if (!state.draft && state.activeClientId && state.clients[state.activeClientId]) {
+    state.draft = newDraft(state.activeClientId, true);
+  } else if (!state.draft && Object.keys(state.clients).length > 0) {
+    state.activeClientId = Object.keys(state.clients)[0];
+    state.draft = newDraft(state.activeClientId, true);
+  }
+  // Open personal panel if no personal info yet
+  if (!state.personal.name) {
+    document.getElementById("personalSection").open = true;
+  }
+
+  bindPersonal();
+  bindClientFields();
+  bindInvoiceMeta();
+
+  document.getElementById("clientSelect").addEventListener("change", (e) => switchClient(e.target.value));
+  document.getElementById("newClientBtn").addEventListener("click", createClient);
+  document.getElementById("deleteClientBtn").addEventListener("click", deleteCurrentClient);
+  document.getElementById("addItemBtn").addEventListener("click", addItem);
+  document.getElementById("newInvoiceBtn").addEventListener("click", startNewInvoice);
+  document.getElementById("exportBtn").addEventListener("click", exportPDF);
+
+  // Floating jump button (mobile)
+  const jumpBtn = document.getElementById("jumpBtn");
+  const jumpLabel = document.getElementById("jumpLabel");
+  const jumpArrow = document.getElementById("jumpArrow");
+  jumpBtn.addEventListener("click", () => {
+    const preview = document.getElementById("invoicePreview");
+    const previewTop = preview.getBoundingClientRect().top + window.scrollY;
+    const editorBottomThreshold = previewTop - 100;
+    if (window.scrollY < editorBottomThreshold) {
+      // currently in editor → scroll to preview
+      preview.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      // currently in preview → scroll back to top
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+  function updateJumpLabel() {
+    const preview = document.getElementById("invoicePreview");
+    if (!preview) return;
+    const previewTop = preview.getBoundingClientRect().top + window.scrollY;
+    if (window.scrollY < previewTop - 100) {
+      jumpLabel.textContent = "View invoice";
+      jumpArrow.textContent = "↓";
+    } else {
+      jumpLabel.textContent = "Back to edit";
+      jumpArrow.textContent = "↑";
+    }
+  }
+  window.addEventListener("scroll", updateJumpLabel, { passive: true });
+  window.addEventListener("resize", updateJumpLabel);
+  updateJumpLabel();
+
+  renderAll();
+}
+
+init();
+</script>
+</body>
+</html>
